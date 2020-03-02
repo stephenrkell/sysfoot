@@ -4,9 +4,9 @@ SRCROOT := $(realpath $(dir $(THIS_MAKEFILE)))/..
 SYS := $(shell uname -s | tr A-Z a-z )
 
 CONTRIB := $(SRCROOT)/contrib
-CONFIG := $(CONTRIB)/config.mk
+CONFIG ?= $(CONTRIB)/config.mk
 
-default: trace-syscalls.so
+default: trace-sysfoot.so
 
 $(CONTRIB)/config.mk:
 	$(MAKE) -C $(CONTRIB)
@@ -21,22 +21,22 @@ CFLAGS += -DSYSTRAP_DEFINE_FILE
 ifeq ($(LIBRUNT_DIR),)
 $(error Please install the librunt source tree and set LIBRUNT_DIR to point to it)
 endif
-
+ifeq ($(LIBSYSTRAP_DIR),)
+$(error Please install the libsystrap source tree and set LIBSYSTRAP_DIR to point to it)
+endif
 # don't insist on libfootprints
 # ifeq ($(LIBFOOTPRINTS_DIR),)
 # $(error Please install the libfootprints source tree and set LIBFOOTPRINTS_DIR)
 # endif
-
-# ditto for syscall-introspect-tools
-# ifeq ($(SYSCALL_INTROSPECT_TOOLS_DIR),)
-# $(error Please install the syscall-introspect-tools source tree and set SYSCALL_INTROSPECT_TOOLS_DIR)
-# endif
+ifeq ($(SYSCALL_INTERFACES_DIR),)
+$(error Please install syscall-interfaces and set SYSCALL_INTERFACES_DIR to it)
+endif
 
 #ifeq ($(ANTLR3C_DIR),)
 #$(error Please install the libantlr3c source tree and set ANTLR3C_DIR)
 #endif
 
-ifeq ($(realpath $(SRCROOT)/src/libsystrap.a),)
+ifeq ($(realpath $(LIBSYSTRAP_DIR)/src/libsystrap.a),)
 $(error Please build libsystrap first)
 endif
 
@@ -51,7 +51,7 @@ FOOTPRINTS_A := $(LIBFOOTPRINTS_DIR)/src/.libs/libfootprints.a $(LIBFOOTPRINTS_D
 # PROBLEM: this archive always contains non-PIC code
 # (even if we set CFLAGS to always include -fPIC... libtool interferes).
 # ANTLR3C_A := $(ANTLR3C_DIR)/.libs/libantlr3c.a
-# Instead, build our own libantlr3c.a from the PIC objects.
+# Instead, build our own libantlr3c_pic.a from the PIC objects.
 ANTLR3C_A := libantlr3c_pic.a 
 
 libantlr3c_pic.a: $(wildcard $(ANTLR3C_DIR)/.libs/*.o)
@@ -62,49 +62,23 @@ vpath %.h
 
 CFLAGS += -g 
 CFLAGS += -Wall -Wno-unused-label -Wno-comment
-CFLAGS += -O2
-#CFLAGS += -O0
+CFLAGS += -O0 # -O2
 CFLAGS += -fPIC
 CFLAGS += -ffreestanding -fno-omit-frame-pointer
 
 CFLAGS += -I $(LIBRUNT_DIR)/include
-ifneq ($(LIBFOOTPRINTS_DIR),)
 CFLAGS += -I $(LIBFOOTPRINTS_DIR)/include
-endif
-ifneq ($(DWARFIDL_DIR),)
 CFLAGS += -I $(DWARFIDL_DIR)/include
 CFLAGS += -I $(DWARFIDL_DIR)/parser
-endif
-ifneq ($(ANTLR3C_DIR),)
 CFLAGS += -I $(ANTLR3C_DIR)
 CFLAGS += -I $(ANTLR3C_DIR)/include
-endif
-CFLAGS += -I $(SRCROOT)/src # FIXME: should be an include dir
-ifneq ($(SYSCALL_INTROSPECT_TOOLS),)
-CFLAGS += -I $(SYSCALL_INTROSPECT_TOOLS)/scripts
-endif
 
-CXXFLAGS := $(CXXFLAGS) $(CFLAGS) # eagerly latch CFLAGS now; don't want later additions
+# we once used C++, and might do again...
+#CXXFLAGS := $(CXXFLAGS) $(CFLAGS) # eagerly latch CFLAGS now; don't want later additions
+#CXXFLAGS += -std=c++11
 
 # can now add C-specific options to CFLAGS
 CFLAGS += -std=c99
-CXXFLAGS += -std=c++11 $(LLVM_CXXFLAGS)
-
-$(SYS)-syscall-ifacetypes.c:
-
-# This is a quick but incomplete way to build a number->name mapping
-linux-syscall-macros.h:
-	( /usr/bin/cpp -E -D"__SYSCALL(num,decl)=decl" -o - /usr/include/asm-generic/unistd.h </dev/null | \
-           sed -r '/^(#.*)?$$/ d' | sort | uniq | sed -r 's/^(sys_)?(.*)/#ifdef SYS_\2\nSYSCALL(\2)\n#endif/') > "$@" || (rm -f "$@"; false)
-
-freebsd-syscall-macros.h:
-	cat /usr/include/sys/syscall.h | grep 'SYS_[a-z][A-Za-z0-9_]*' | cut -f2 | \
-    sed 's/SYS_\(.*\)/SYSCALL(\1)/' > "$@" || (rm -f "$@"; false)
-
-# Avoid building local incomplete .h if we have the complete one at hand.
-# This means we don't need a working syscall-introspect-tools to proceed,
-# but we'll pick it up if its syscall-macros.h has been built.
-vpath %.h $(SYSCALL_INTROSPECT_TOOLS)/scripts
 
 syscall-macros.h: $(SYS)-syscall-macros.h
 	cp "$<" "$@"
@@ -145,31 +119,17 @@ space := $(null) #
 comma := ,
 # FIXME: make our dynamic symbols hidden! 
 # We don't want user code calling into our exit(), hence having us make its syscalls.
-# NOTE: the --whole-archive is only necessary for debugging, to ensure that
-# functions we might want to call from the debugger are actually linked in
-trace-syscalls.so: LDLIBS := -Bstatic \
-	$(SRCROOT)/src/libsystrap.a \
-	-Wl,--whole-archive $(LIBRUNT_DIR)/lib/librunt_preload.a -Wl,--no-whole-archive
 
 trace-sysfoot.so: LDLIBS := -Bstatic \
-	$(SRCROOT)/src/libsystrap.a \
+	$(LIBSYSTRAP_DIR)/lib/libsystrap.a \
+	$(LIBRUNT_DIR)/lib/librunt_preload.a \
 	$(LIBC_A) \
 	$(FOOTPRINTS_A) \
 	$(DWARFIDL_DIR)/parser/dwarfidlSimpleCLexer.o \
 	$(DWARFIDL_DIR)/parser/dwarfidlSimpleCParser.o \
 	$(ANTLR3C_A)
-# HACK
-#ZLIB_A := /usr/lib/x86_64-linux-gnu/libz.a
-#ifneq ($(SYS),freebsd)
-#trace-syscalls.so trace-sysfoot.so: LDLIBS += \
-#	$(ZLIB_A)
-#endif
-
-LD_SO ?= /lib64/ld-linux-x86-64.so.2  # HACK: sysdep
-trace-syscalls.so: LDLIBS += \
-	dlmalloc.a \
-	$(LD_SO) \
-	$(LIBC_A) -lunwind-x86_64 -lunwind -lgcc_s -lpthread
+# NOTE: use of --whole-archive is only necessary for debugging, to ensure that
+# functions we might want to call from the debugger are actually linked in
 
 # we used to insist -Wl,--hash-style=sysv here, but relf.h now groks GNU-style
 trace-syscalls.so trace-sysfoot.so: LDFLAGS += \
@@ -177,30 +137,19 @@ trace-syscalls.so trace-sysfoot.so: LDFLAGS += \
 -Wl,--defsym,__private_strdup=strdup -Wl,--defsym,__private_malloc=malloc \
 -Wl,--defsym,__private_free=free
 
-# don't use lazy binding -- it's bad if we've removed exec permission
-trace-syscalls.so trace-sysfoot.so: LDFLAGS += \
-	-Wl,-z,now -fno-lto -Wl,--exclude-libs=ALL
+# we borrow code from the libsystrap example tracer
+vpath %.c $(LIBSYSTRAP_DIR)/example
 
-trace-syscalls.so trace-sysfoot.so: trap-syscalls.o syscall-names.o handle-syscall.o dlmalloc.a
+trace-sysfoot.so: trap-syscalls.o syscall-names.o handle-syscall.o dlmalloc.a write-footprints.o
 trace-sysfoot.so: $(filter-out dlmalloc.o,$(OBJS)) libantlr3c_pic.a
-
+# don't use lazy binding -- it's bad if we've removed exec permission from ld.so
+trace-sysfoot.so: LDFLAGS += -Wl,-z,now -fno-lto -Wl,--exclude-libs=ALL
 # FIXME: check whether these are really necessary in the librunt world
-trace-syscalls.so: LDFLAGS += -Wl,--defsym,__GI___assert_fail=__assert_fail \
+trace-sysfoot.so: LDFLAGS += -Wl,--defsym,__GI___assert_fail=__assert_fail \
   -Wl,--defsym,stat=raw_stat
-trace-syscalls.so: LDFLAGS += -Wl,-Map,trace-syscalls.map
+trace-sysfoot.so: LDFLAGS += -Wl,-Map,trace-sysfoot.map
 
-# We have to defsym __GI____assert_fail because it's defined in the same file as 
-# __assert_fail, and some libc symbols refer to it using this alias. Otherwise
-# the libc archive's __assert_fail gets pulled in because it's the only definition
-# of __GI____assert_fail, and we have to use its __assert_fail too.
-trace-syscalls.so: $(SRCROOT)/src/libsystrap.a
-	$(CC) -shared -Bsymbolic \
-		-fuse-ld=gold \
-		-Wl,-h,$@ \
-		-o "$@" $(filter-out %.a,$+) \
-		$(LDFLAGS) $(LDLIBS)
-
-trace-sysfoot.so: dynamic-list $(SRCROOT)/src/libsystrap.a
+trace-sysfoot.so: dynamic-list $(LIBSYSTRAP_DIR)/src/libsystrap.a
 	$(CC) -shared -Bsymbolic \
 		-fuse-ld=gold \
 		-Wl,--dynamic-list,dynamic-list \
@@ -214,6 +163,6 @@ trace-sysfoot.so: dynamic-list $(SRCROOT)/src/libsystrap.a
 
 .PHONY: clean
 clean:
-	rm -f trace-syscalls.so
+	rm -f trace-sysfoot.so
 	rm -f *.o *.a
 	rm -f .*.d

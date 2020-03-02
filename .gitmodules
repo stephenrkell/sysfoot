@@ -1,0 +1,9 @@
+[submodule "contrib/libfootprints"]
+	path = contrib/libfootprints
+	url = https://github.com/stephenrkell/libfootprints
+[submodule "contrib/syscall-interfaces"]
+	path = contrib/syscall-interfaces
+	url = git://github.com/stephenrkell/syscall-interfaces.git
+[submodule "contrib/libsystrap"]
+	path = contrib/libsystrap
+	url = git://github.com/stephenrkell/libsystrap.git
