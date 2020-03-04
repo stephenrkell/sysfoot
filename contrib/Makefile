@@ -52,6 +52,7 @@ libfootprints/config.status: libfootprints/Makefile.in libfootprints/configure b
 	cd libfootprints && \
                 DWARFIDL_CFLAGS="-I$(SYSCALL_INTERFACES_DIR)/contrib/dwarfidl/include" \
                 DWARFIDL_LIBS="-L$(SYSCALL_INTERFACES_DIR)/contrib/dwarfidl/lib" \
+                CFLAGS="-I$(SYSCALL_INTERFACES_DIR)/lib" \
                 ./configure --prefix=/usr/local
 
 .PHONY: build-libfootprints
@@ -65,7 +66,7 @@ CONFIG_MK += \nLIBFOOTPRINTS_DIR := $(CONTRIB)/libfootprints\n
 
 # ----------------------------
 
-varlist := LIBSYSTRAP_DIR SYSCALL_INTERFACES_DIR LIBFOOTPRINTS_DIR
+varlist := DWARFIDL_DIR LIBSYSTRAP_DIR SYSCALL_INTERFACES_DIR LIBFOOTPRINTS_DIR
 
 CONFIG_MK += \n\nenv.sh:\n\tprintf '"'"'$(foreach var,$(varlist),export $(var)="$$($(var))"; )'"'"' >"$$@" || (rm -f "$$@"; false)
 
