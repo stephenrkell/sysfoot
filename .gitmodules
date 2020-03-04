@@ -7,3 +7,6 @@
 [submodule "contrib/libsystrap"]
 	path = contrib/libsystrap
 	url = git://github.com/stephenrkell/libsystrap.git
+[submodule "contrib/liballocstool"]
+	path = contrib/liballocstool
+	url = git://github.com/stephenrkell/liballocstool.git
