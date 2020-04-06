@@ -57,7 +57,6 @@ ANTLR3C_A := libantlr3c_pic.a
 libantlr3c_pic.a: $(wildcard $(ANTLR3C_DIR)/.libs/*.o)
 	$(AR) r "$@" $^
 
-vpath %.c $(LIBALLOCS_DIR)/src
 vpath %.h
 
 CFLAGS += -g 
@@ -132,7 +131,7 @@ trace-sysfoot.so: LDLIBS := -Bstatic \
 # functions we might want to call from the debugger are actually linked in
 
 # we used to insist -Wl,--hash-style=sysv here, but relf.h now groks GNU-style
-trace-syscalls.so trace-sysfoot.so: LDFLAGS += \
+trace-sysfoot.so: LDFLAGS += \
 -fno-lto -nostdlib -Wl,--no-as-needed \
 -Wl,--defsym,__private_strdup=strdup -Wl,--defsym,__private_malloc=malloc \
 -Wl,--defsym,__private_free=free
